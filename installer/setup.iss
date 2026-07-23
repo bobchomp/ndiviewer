@@ -15,6 +15,7 @@
 #define MyAppURL "https://ndi.video"
 #define MyAppExeName "NdiViewer.exe"
 #define PublishDir "..\publish"
+#define AppIcon "..\src\NdiViewer\Assets\app.ico"
 
 [Setup]
 AppId={{6C0B6A6E-4B2C-4C43-9C9E-4E2B4B7A9C9E}}
@@ -34,6 +35,7 @@ SolidCompression=yes
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
+SetupIconFile={#AppIcon}
 UninstallDisplayIcon={app}\{#MyAppExeName}
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
