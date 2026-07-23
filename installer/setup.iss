@@ -60,10 +60,12 @@ Filename: "{app}\{#MyAppExeName}"; Description: "Launch {#MyAppName}"; Flags: no
 [Code]
 // --- NDI Runtime detection -------------------------------------------------
 // NDI Viewer talks to the NDI network stack through the free, separately
-// distributed "NDI Runtime". We never bundle NDI's own binaries in this
-// installer; instead we detect whether the runtime is already present and,
-// if not, offer to install it via winget (the same mechanism documented by
-// NDI/Vizrt at https://ndi.link/NDIRedistV6).
+// distributed "NDI Runtime". We never bundle NDI's own binaries inside this
+// installer's [Files] section; instead we detect whether the runtime is
+// already present and, if not, automatically download the official
+// redistributable from https://ndi.link/NDIRedistV6 (documented by NDI/Vizrt)
+// and run it silently, falling back to winget and then a manual download
+// link if that doesn't work out.
 
 function IsNdiRuntimeInstalled: Boolean;
 var
@@ -99,22 +101,76 @@ begin
     ewWaitUntilTerminated, ResultCode) and (ResultCode = 0);
 end;
 
+// Progress callback required by DownloadTemporaryFile. Returning True lets the
+// download continue; we don't need per-chunk UI feedback, just to keep going.
+function OnNdiDownloadProgress(const Url, FileName: String; const Progress, ProgressMax: Int64): Boolean;
+begin
+  Result := True;
+end;
+
+// Downloads the official NDI Runtime redistributable straight from Vizrt's
+// stable link (https://ndi.link/NDIRedistV6, documented in NDI's own Software
+// Distribution guide) and runs it silently. The NDI redistributable is itself
+// built with Inno Setup, so it understands the same /VERYSILENT switches we do.
+// Returns True only if the download and the install both actually succeeded.
+function TryDownloadAndInstallNdiRuntime: Boolean;
+var
+  DownloadedFile: string;
+  ResultCode: Integer;
+begin
+  Result := False;
+  DownloadedFile := ExpandConstant('{tmp}\NDIRedistV6.exe');
+
+  try
+    DownloadTemporaryFile('https://ndi.link/NDIRedistV6', 'NDIRedistV6.exe', '', @OnNdiDownloadProgress);
+  except
+    Log('Failed to download the NDI Runtime installer: ' + GetExceptionMessage);
+    Exit;
+  end;
+
+  if not FileExists(DownloadedFile) then
+  begin
+    Log('NDI Runtime installer did not end up at the expected temp path.');
+    Exit;
+  end;
+
+  if Exec(DownloadedFile, '/SP- /VERYSILENT /NORESTART', '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then
+  begin
+    Result := (ResultCode = 0);
+    if not Result then
+      Log('NDI Runtime installer exited with code ' + IntToStr(ResultCode));
+  end
+  else
+  begin
+    Log('Failed to launch the downloaded NDI Runtime installer.');
+  end;
+end;
+
+function TryInstallNdiRuntimeViaWinget: Boolean;
+var
+  ResultCode: Integer;
+begin
+  Result := False;
+  if not IsWingetAvailable then
+    Exit;
+
+  if Exec('winget.exe',
+       'install --exact --silent --id NDI.NDIRuntime --accept-package-agreements --accept-source-agreements',
+       '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then
+  begin
+    Result := (ResultCode = 0);
+  end;
+end;
+
 procedure InstallNdiRuntime;
 var
   ResultCode: Integer;
   Installed: Boolean;
 begin
-  Installed := False;
+  Installed := TryDownloadAndInstallNdiRuntime;
 
-  if IsWingetAvailable then
-  begin
-    if Exec('winget.exe',
-         'install --exact --silent --id NDI.NDIRuntime --accept-package-agreements --accept-source-agreements',
-         '', SW_SHOW, ewWaitUntilTerminated, ResultCode) then
-    begin
-      Installed := (ResultCode = 0);
-    end;
-  end;
+  if not Installed then
+    Installed := TryInstallNdiRuntimeViaWinget;
 
   if not Installed then
   begin
