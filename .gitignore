@@ -1,0 +1,14 @@
+## Build outputs
+bin/
+obj/
+publish/
+dist/
+*.user
+
+## Visual Studio / Rider
+.vs/
+.idea/
+*.suo
+
+## Inno Setup
+installer/*.exe
