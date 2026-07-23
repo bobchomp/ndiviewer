@@ -42,12 +42,19 @@ public sealed class NdiFinder : IDisposable
     {
         while (_running)
         {
-            // Blocks for up to 1s, returning early if the source list changes.
-            NdiInterop.NDIlib_find_wait_for_sources(_handle, 1000);
+            // Blocks for up to 1s, returning true only if the source list actually
+            // changed - skip the refresh entirely otherwise to avoid needless UI
+            // churn (list rebuilds, selection loss) on a static network.
+            bool changed = NdiInterop.NDIlib_find_wait_for_sources(_handle, 1000);
 
             if (!_running)
             {
                 break;
+            }
+
+            if (!changed)
+            {
+                continue;
             }
 
             try
@@ -92,7 +99,13 @@ public sealed class NdiFinder : IDisposable
         }
 
         _running = false;
-        _thread.Join(2000);
-        NdiInterop.NDIlib_find_destroy(_handle);
+
+        // See the equivalent comment in NdiReceiver.Dispose: only destroy the native
+        // instance once we're certain the poll thread has left its P/Invoke call,
+        // to avoid a use-after-free race.
+        if (_thread.Join(5000))
+        {
+            NdiInterop.NDIlib_find_destroy(_handle);
+        }
     }
 }

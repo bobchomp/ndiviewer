@@ -123,6 +123,10 @@ public sealed class NdiReceiver : IDisposable
                     FrameRate = frameRate,
                 });
             }
+            catch (Exception ex)
+            {
+                ConnectionError?.Invoke(ex.Message);
+            }
             finally
             {
                 NdiInterop.NDIlib_recv_free_video_v2(_handle, ref videoFrame);
@@ -138,7 +142,15 @@ public sealed class NdiReceiver : IDisposable
         }
 
         _running = false;
-        _thread.Join(2000);
-        NdiInterop.NDIlib_recv_destroy(_handle);
+
+        // The capture loop blocks on NDIlib_recv_capture_v2 with a 1s timeout, so it
+        // should notice _running == false and exit well within this window. If it
+        // somehow doesn't, destroying the native instance while the thread is still
+        // inside a P/Invoke call would be a use-after-free - so we deliberately skip
+        // the native destroy (leaking the handle) rather than risk crashing.
+        if (_thread.Join(5000))
+        {
+            NdiInterop.NDIlib_recv_destroy(_handle);
+        }
     }
 }
