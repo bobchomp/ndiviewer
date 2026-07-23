@@ -21,9 +21,12 @@ Instead:
 
 - At startup, the app looks for an existing NDI Runtime install (`NdiRuntimeLocator.cs`)
   via the `NDI_RUNTIME_DIR_V*` environment variables and common `Program Files` paths.
-- If it's missing, the installer offers to install the free, official NDI Runtime via
-  `winget install --id NDI.NDIRuntime` (the mechanism documented by NDI/Vizrt), falling
-  back to opening https://ndi.link/NDIRedistV6 if winget isn't available.
+- If it's missing, `installer/setup.iss` automatically downloads the official NDI
+  Runtime redistributable from https://ndi.link/NDIRedistV6 (Inno Setup's built-in
+  `DownloadTemporaryFile`) and runs it silently (`/SP- /VERYSILENT /NORESTART` - the
+  NDI redistributable is itself Inno Setup-based). If that download/run fails, it falls
+  back to `winget install --id NDI.NDIRuntime`, and if that's unavailable too, it opens
+  the download page in the browser as a last resort.
 - If the app is launched without the runtime present at all, it shows a message
   explaining what to install rather than crashing.
 
