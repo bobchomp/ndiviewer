@@ -5,7 +5,7 @@
         Width="440" SizeToContent="Height"
         WindowStartupLocation="CenterScreen"
         ResizeMode="NoResize"
-        Icon="Assets/app.ico"
+        Icon="/Assets/app.ico"
         Topmost="True"
         Closing="Window_Closing">
     <Grid Margin="24">

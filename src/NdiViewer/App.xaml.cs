@@ -20,6 +20,10 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
+        // Backstop so an unexpected exception on the UI thread (e.g. in the update
+        // flow) shows an error instead of silently freezing the app.
+        DispatcherUnhandledException += OnDispatcherUnhandledException;
+
         if (!NdiRuntimeLocator.TryPrepare(out _))
         {
             MessageBox.Show(
@@ -98,23 +102,43 @@ public partial class App : Application
 
         // Block every other open window (main + any preview windows) so the app is
         // unusable until the update is installed - this is a mandatory update prompt.
+        // Wrapped in try/finally: if constructing or showing UpdateWindow throws for
+        // any reason, we must still re-enable those windows and clear the flag,
+        // otherwise the app is left permanently frozen with no way to recover and no
+        // future update check will ever run again.
         var otherWindows = Windows.OfType<Window>().ToList();
         foreach (Window window in otherWindows)
         {
             window.IsEnabled = false;
         }
 
-        var updateWindow = new UpdateWindow(info) { Owner = MainWindow };
-        updateWindow.ShowDialog();
-
-        // Only reached if the update flow ends without the app shutting down, which
-        // shouldn't normally happen since UpdateWindow only closes on success.
-        foreach (Window window in otherWindows)
+        try
         {
-            window.IsEnabled = true;
+            var updateWindow = new UpdateWindow(info) { Owner = MainWindow };
+            updateWindow.ShowDialog();
         }
+        finally
+        {
+            // Reached once the dialog closes (normally only via a successful update,
+            // which shuts the whole app down anyway) or if showing it failed outright.
+            foreach (Window window in otherWindows)
+            {
+                window.IsEnabled = true;
+            }
 
-        _updatePromptShowing = false;
+            _updatePromptShowing = false;
+        }
+    }
+
+    private void OnDispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+    {
+        MessageBox.Show(
+            $"NDI Viewer hit an unexpected error and needs to close it:\n\n{e.Exception.Message}",
+            "Unexpected Error",
+            MessageBoxButton.OK,
+            MessageBoxImage.Error);
+        e.Handled = true;
+        Shutdown(1);
     }
 
     protected override void OnExit(ExitEventArgs e)

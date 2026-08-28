@@ -40,9 +40,10 @@ public partial class UpdateWindow : Window
         ProgressBarControl.Visibility = Visibility.Visible;
         StatusText.Text = "Downloading update...";
 
+        string tempPath = Path.Combine(Path.GetTempPath(), _updateInfo.FileName);
+
         try
         {
-            string tempPath = Path.Combine(Path.GetTempPath(), _updateInfo.FileName);
             await DownloadAsync(_updateInfo.DownloadUrl, tempPath);
 
             StatusText.Text = "Starting installer...";
@@ -53,9 +54,28 @@ public partial class UpdateWindow : Window
         }
         catch (Exception ex)
         {
+            TryDeletePartialDownload(tempPath);
+
             StatusText.Text = $"Update failed: {ex.Message}\nClick Update to try again.";
             ProgressBarControl.Visibility = Visibility.Collapsed;
             UpdateButton.IsEnabled = true;
+        }
+    }
+
+    private static void TryDeletePartialDownload(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch
+        {
+            // Best-effort cleanup only - a locked/undeletable leftover file isn't
+            // worth failing the retry over; File.Create on the next attempt will
+            // surface any real problem with the path.
         }
     }
 
