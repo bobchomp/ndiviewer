@@ -32,6 +32,25 @@ Instead:
 
 This product uses NDI®, a registered trademark of Vizrt NDI AB.
 
+## Auto-update
+
+`src/NdiViewer/Update/` implements a mandatory update flow:
+
+- On startup, and then every 4 hours while running, `UpdateChecker.cs` calls GitHub's
+  `GET /repos/bobchomp/ndiviewer/releases/latest` API and compares its tag (`vX.Y.Z`)
+  against the running app's own version (via `AssemblyInformationalVersion`, which the
+  csproj keeps as a plain `X.Y.Z` for exactly this comparison).
+- If the release is newer, `UpdateWindow` pops up over the whole app (every open window
+  is disabled) with a message and a single **Update** button - the window refuses to
+  close any other way, so there's no way to keep using a stale version.
+- Clicking **Update** downloads that release's `NdiViewer-Setup-*.exe` asset to the temp
+  folder, launches it, then shuts the running app down so the installer can proceed.
+- Any failure in the background check itself (offline, GitHub unreachable, rate limited)
+  is treated as "no update available" and never surfaces to the user - it's a best-effort
+  check, not a critical path. A failure *during* the download/install after the user has
+  clicked Update does show an error and lets them retry, since at that point they're
+  already committed to updating.
+
 ## Building locally (Windows only)
 
 ```powershell

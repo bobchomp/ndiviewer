@@ -14,6 +14,9 @@
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
     <InvariantGlobalization>true</InvariantGlobalization>
     <Version>1.0.0</Version>
+    <!-- Keep AssemblyInformationalVersion as a plain "X.Y.Z" - UpdateChecker parses it
+         to compare against GitHub release tags, and a "+<git-sha>" suffix would break that. -->
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
   </PropertyGroup>
 
   <ItemGroup>
