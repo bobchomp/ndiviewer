@@ -1,12 +1,20 @@
 using System;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows;
 using NdiViewer.Ndi;
+using NdiViewer.Update;
 
 namespace NdiViewer;
 
 public partial class App : Application
 {
+    private static readonly TimeSpan UpdateCheckInterval = TimeSpan.FromHours(4);
+
     private bool _ndiInitialized;
+    private Timer? _updateCheckTimer;
+    private volatile bool _updatePromptShowing;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -43,10 +51,76 @@ public partial class App : Application
         var mainWindow = new MainWindow();
         MainWindow = mainWindow;
         mainWindow.Show();
+
+        StartUpdateChecks();
+    }
+
+    private void StartUpdateChecks()
+    {
+        _ = CheckForUpdatesAsync();
+
+        _updateCheckTimer = new Timer(
+            _ => _ = CheckForUpdatesAsync(),
+            null,
+            UpdateCheckInterval,
+            UpdateCheckInterval);
+    }
+
+    private async Task CheckForUpdatesAsync()
+    {
+        if (_updatePromptShowing)
+        {
+            return;
+        }
+
+        UpdateInfo? info = await UpdateChecker.CheckForUpdateAsync();
+        if (info is null)
+        {
+            return;
+        }
+
+        if (Dispatcher.HasShutdownStarted || Dispatcher.HasShutdownFinished)
+        {
+            return;
+        }
+
+        await Dispatcher.InvokeAsync(() => ShowUpdatePrompt(info));
+    }
+
+    private void ShowUpdatePrompt(UpdateInfo info)
+    {
+        if (_updatePromptShowing)
+        {
+            return;
+        }
+
+        _updatePromptShowing = true;
+
+        // Block every other open window (main + any preview windows) so the app is
+        // unusable until the update is installed - this is a mandatory update prompt.
+        var otherWindows = Windows.OfType<Window>().ToList();
+        foreach (Window window in otherWindows)
+        {
+            window.IsEnabled = false;
+        }
+
+        var updateWindow = new UpdateWindow(info) { Owner = MainWindow };
+        updateWindow.ShowDialog();
+
+        // Only reached if the update flow ends without the app shutting down, which
+        // shouldn't normally happen since UpdateWindow only closes on success.
+        foreach (Window window in otherWindows)
+        {
+            window.IsEnabled = true;
+        }
+
+        _updatePromptShowing = false;
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _updateCheckTimer?.Dispose();
+
         if (_ndiInitialized)
         {
             NdiInterop.NDIlib_destroy();
